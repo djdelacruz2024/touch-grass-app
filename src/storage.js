@@ -1,22 +1,17 @@
-// Simple storage wrapper that mimics the Claude storage API
+// Simple localStorage-backed key/value store.
+// Keys are namespaced as `user:` (private) or `shared:` (leaderboard) entries.
+const namespace = (shared) => (shared ? 'shared:' : 'user:');
+
 export const storage = {
+  // Resolves to null when the key does not exist.
   async get(key, shared = false) {
-    try {
-      const fullKey = shared ? `shared:${key}` : `user:${key}`;
-      const value = localStorage.getItem(fullKey);
-      if (value === null) {
-        throw new Error('Key not found');
-      }
-      return { key, value, shared };
-    } catch (error) {
-      throw error;
-    }
+    const value = localStorage.getItem(namespace(shared) + key);
+    return value === null ? null : { key, value, shared };
   },
 
   async set(key, value, shared = false) {
     try {
-      const fullKey = shared ? `shared:${key}` : `user:${key}`;
-      localStorage.setItem(fullKey, value);
+      localStorage.setItem(namespace(shared) + key, value);
       return { key, value, shared };
     } catch (error) {
       return null;
@@ -25,22 +20,22 @@ export const storage = {
 
   async delete(key, shared = false) {
     try {
-      const fullKey = shared ? `shared:${key}` : `user:${key}`;
-      localStorage.removeItem(fullKey);
+      localStorage.removeItem(namespace(shared) + key);
       return { key, deleted: true, shared };
     } catch (error) {
       return null;
     }
   },
 
+  // Returns keys without the namespace so they can be passed straight back to get().
   async list(prefix = '', shared = false) {
     try {
-      const fullPrefix = shared ? `shared:${prefix}` : `user:${prefix}`;
+      const ns = namespace(shared);
       const keys = [];
       for (let i = 0; i < localStorage.length; i++) {
         const key = localStorage.key(i);
-        if (key && key.startsWith(fullPrefix)) {
-          keys.push(key);
+        if (key && key.startsWith(ns + prefix)) {
+          keys.push(key.slice(ns.length));
         }
       }
       return { keys, prefix, shared };
@@ -50,7 +45,6 @@ export const storage = {
   }
 };
 
-// Make it available globally like in Claude
 if (typeof window !== 'undefined') {
   window.storage = storage;
 }
