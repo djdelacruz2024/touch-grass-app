@@ -1,6 +1,25 @@
 import './storage';
-import React, { useState, useRef } from 'react';
-import { Camera, Upload, Check, X, Loader2, Trophy, Award, User, LogOut, TrendingUp, Image as ImageIcon } from 'lucide-react';
+import React, { useState, useRef, useEffect } from 'react';
+import { Camera, Upload, Check, X, Loader2, Trophy, Award, User, LogOut, TrendingUp, Image as ImageIcon, AlertTriangle } from 'lucide-react';
+import { currentStreak, nextStreak } from './streak';
+
+const LAST_USER_KEY = 'touchgrass:lastUser';
+const MAX_PHOTO_SIZE = 1024; // px on the longest side; keeps uploads small and fast
+
+// Decodes the photo and re-encodes it as a downscaled JPEG data URL.
+const resizePhoto = (dataUrl) => new Promise((resolve, reject) => {
+  const img = new Image();
+  img.onload = () => {
+    const scale = Math.min(1, MAX_PHOTO_SIZE / Math.max(img.width, img.height));
+    const canvas = document.createElement('canvas');
+    canvas.width = Math.round(img.width * scale);
+    canvas.height = Math.round(img.height * scale);
+    canvas.getContext('2d').drawImage(img, 0, 0, canvas.width, canvas.height);
+    resolve(canvas.toDataURL('image/jpeg', 0.85));
+  };
+  img.onerror = () => reject(new Error("Couldn't read that image. Try a JPEG or PNG photo."));
+  img.src = dataUrl;
+});
 
 export default function TouchGrassApp() {
   const [view, setView] = useState('login');
@@ -23,6 +42,11 @@ export default function TouchGrassApp() {
       const result = await window.storage.get(`user:${user}`);
       if (result) {
         const data = JSON.parse(result.value);
+        const streak = currentStreak(data);
+        if (streak !== data.streak) {
+          data.streak = streak;
+          await window.storage.set(`user:${user}`, JSON.stringify(data));
+        }
         setUserData(data);
         
         const galleryResult = await window.storage.get(`gallery:${user}`);
@@ -135,144 +159,104 @@ export default function TouchGrassApp() {
   };
 
   const analyzeImage = async (imageData) => {
-  setAnalyzing(true);
-  setResult(null);
+    setAnalyzing(true);
+    setResult(null);
+    setImage(null);
 
-  try {
-    // Simulate realistic processing time
-    await new Promise(resolve => setTimeout(resolve, 2000));
-    
-    // Create image element to analyze
-    const img = new Image();
-    img.src = imageData;
-    
-    await new Promise((resolve) => {
-      img.onload = resolve;
-    });
-    
-    // Analyze brightness and color
-    const canvas = document.createElement('canvas');
-    const ctx = canvas.getContext('2d');
-    canvas.width = img.width;
-    canvas.height = img.height;
-    ctx.drawImage(img, 0, 0);
-    
-    const imageDataRaw = ctx.getImageData(0, 0, canvas.width, canvas.height);
-    const data = imageDataRaw.data;
-    let brightness = 0;
-    let greenness = 0;
-    let totalPixels = data.length / 4;
-    
-    for (let i = 0; i < data.length; i += 4) {
-      const r = data[i];
-      const g = data[i + 1];
-      const b = data[i + 2];
-      
-      brightness += (r + g + b) / 3;
-      
-      // Check if pixel is green-ish (grass color)
-      if (g > r && g > b && g > 100) {
-        greenness++;
+    try {
+      const photo = await resizePhoto(imageData);
+      setImage(photo);
+
+      let response;
+      try {
+        response = await fetch('/api/analyze', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ image: photo })
+        });
+      } catch {
+        throw new Error("Couldn't reach the grass judge. Check your connection and try again.");
       }
-    }
-    
-    brightness = brightness / totalPixels;
-    const greenPercentage = (greenness / totalPixels) * 100;
-    
-    // Determine if it looks like grass/outdoor
-    const isBright = brightness > 100; // Outdoor photos are brighter
-    const isGreen = greenPercentage > 10; // Has significant green
-    const touchingGrass = isBright && isGreen;
-    
-    const successResponses = [
-      "Finally! You've achieved the impossible - you've gone outside! Your RGB lighting must miss you.",
-      "Wow, actual grass! I'm genuinely impressed. The sun must feel weird on your skin, huh?",
-      "Look at you, touching grass like a normal person! Your Discord server can wait.",
-      "Congratulations! You've discovered the mystical outdoor realm. Legend says there's a big yellow ball in the sky there.",
-      "GRASS CONFIRMED! Take that, basement dwellers! You're one of the chosen ones now.",
-      "Mother Nature sends her regards! Looks like you finally remembered the outside exists.",
-      "Achievement unlocked: Touched Grass! Your gaming chair misses you already.",
-      "Is that... sunlight? And green things? I'm almost proud of you!"
-    ];
-    
-    const failResponses = [
-      "Nice try, but that's not fooling anyone. Is that... a houseplant? Go touch some REAL grass, my friend.",
-      "I see you're trying, but I need to SEE the grass touching. This isn't 'point vaguely at green things' app.",
-      "That's either fake grass, a very green carpet, or you're pranking me. Get outside for real!",
-      "Nope. Not convinced. That looks suspiciously indoor. The sun is free, you know.",
-      "Did you just take a picture of your monitor showing grass? I'm onto you, buddy.",
-      "That's not grass, that's your keyboard's RGB lighting set to green. Nice try though!",
-      "I've seen better attempts. Maybe try actually going outside this time?",
-      "Error 404: Grass not found. Please try again with actual outdoor vegetation."
-    ];
-    
-    const analysis = {
-      touching_grass: touchingGrass,
-      confidence: (isBright && isGreen) ? "high" : "medium",
-      reason: touchingGrass 
-        ? `Outdoor conditions detected! Brightness: ${Math.round(brightness)}/255, Green content: ${greenPercentage.toFixed(1)}%. This looks like real grass!`
-        : `Indoor setting detected. Brightness: ${Math.round(brightness)}/255, Green content: ${greenPercentage.toFixed(1)}%. Need more outdoor indicators!`,
-      roast_or_praise: touchingGrass 
-        ? successResponses[Math.floor(Math.random() * successResponses.length)]
-        : failResponses[Math.floor(Math.random() * failResponses.length)]
-    };
-    
-    setResult(analysis);
-    
-    // Update user stats
-    const updatedData = {
-      ...userData,
-      totalAttempts: userData.totalAttempts + 1,
-      successfulTouches: analysis.touching_grass ? userData.successfulTouches + 1 : userData.successfulTouches,
-      streak: analysis.touching_grass ? userData.streak + 1 : 0,
-      maxStreak: analysis.touching_grass ? Math.max(userData.maxStreak, userData.streak + 1) : userData.maxStreak
-    };
-    
-    updatedData.achievements = checkAchievements(updatedData);
-    
-    await saveUserData(updatedData);
-    await saveToGallery(imageData, analysis);
-    
-    if (analysis.touching_grass) {
-      await updateLeaderboard(username, updatedData.maxStreak);
-    }
-    
-  } catch (error) {
-    console.error("Analysis error:", error);
-    setResult({
-      touching_grass: false,
-      confidence: "error",
-      reason: "Failed to analyze image. Make sure it's a valid photo.",
-      roast_or_praise: "Something went wrong with the AI. Did you upload a corrupted meme?"
-    });
-  } finally {
-    setAnalyzing(false);
-  }
-};
+      const analysis = await response.json().catch(() => ({}));
+      if (!response.ok) {
+        throw new Error(analysis.error || `The grass judge returned an error (${response.status}).`);
+      }
 
-  const handleImageUpload = async (e) => {
+      setResult(analysis);
+
+      const success = analysis.touching_grass;
+      const streakFields = nextStreak(userData, success);
+      const updatedData = {
+        ...userData,
+        ...streakFields,
+        totalAttempts: userData.totalAttempts + 1,
+        successfulTouches: success ? userData.successfulTouches + 1 : userData.successfulTouches,
+        maxStreak: Math.max(userData.maxStreak, streakFields.streak)
+      };
+      updatedData.achievements = checkAchievements(updatedData);
+
+      await saveUserData(updatedData);
+      await saveToGallery(imageData, analysis);
+
+      if (success) {
+        await updateLeaderboard(username, updatedData.maxStreak);
+      }
+    } catch (error) {
+      // Failed checks are not counted as attempts, so they never cost a streak.
+      console.error("Analysis error:", error);
+      setResult({ error: true, reason: error.message });
+    } finally {
+      setAnalyzing(false);
+    }
+  };
+
+  const handleImageUpload = (e) => {
     const file = e.target.files[0];
+    // Clear the input so choosing the same photo again still fires onChange.
+    e.target.value = '';
     if (!file) return;
 
     const reader = new FileReader();
     reader.onload = (event) => {
       const imageData = event.target.result;
-      setImage(imageData);
       analyzeImage(imageData);
     };
     reader.readAsDataURL(file);
   };
 
-  const handleLogin = async () => {
+  const login = async (name) => {
+    setUsername(name);
+    await loadUserData(name);
+    setView('main');
+    try {
+      localStorage.setItem(LAST_USER_KEY, name);
+    } catch {}
+  };
+
+  const handleLogin = () => {
     if (usernameInput.trim()) {
-      setUsername(usernameInput.trim());
-      await loadUserData(usernameInput.trim());
-      setView('main');
+      login(usernameInput.trim());
     }
   };
 
+  // Stay logged in across page reloads.
+  useEffect(() => {
+    let lastUser = null;
+    try {
+      lastUser = localStorage.getItem(LAST_USER_KEY);
+    } catch {}
+    if (lastUser) {
+      login(lastUser);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   const handleLogout = () => {
+    try {
+      localStorage.removeItem(LAST_USER_KEY);
+    } catch {}
     setUsername('');
+    setUsernameInput('');
     setUserData(null);
     setGallery([]);
     setView('login');
@@ -303,7 +287,7 @@ export default function TouchGrassApp() {
               placeholder="Enter username"
               value={usernameInput}
               onChange={(e) => setUsernameInput(e.target.value)}
-              onKeyPress={(e) => e.key === 'Enter' && handleLogin()}
+              onKeyDown={(e) => e.key === 'Enter' && handleLogin()}
               className="w-full px-4 py-3 border-2 border-green-200 rounded-lg focus:border-green-500 focus:outline-none"
             />
             <button
@@ -395,7 +379,8 @@ export default function TouchGrassApp() {
               <div className="space-y-3">
                 <button
                   onClick={() => cameraInputRef.current?.click()}
-                  className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-4 px-6 rounded-xl flex items-center justify-center gap-3 transition-all transform hover:scale-105 shadow-lg"
+                  disabled={analyzing}
+                  className="w-full bg-green-600 hover:bg-green-700 text-white font-semibold py-4 px-6 rounded-xl flex items-center justify-center gap-3 transition-all transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 >
                   <Camera className="w-6 h-6" />
                   Take Photo
@@ -403,7 +388,8 @@ export default function TouchGrassApp() {
                 
                 <button
                   onClick={() => fileInputRef.current?.click()}
-                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-4 px-6 rounded-xl flex items-center justify-center gap-3 transition-all transform hover:scale-105 shadow-lg"
+                  disabled={analyzing}
+                  className="w-full bg-emerald-600 hover:bg-emerald-700 text-white font-semibold py-4 px-6 rounded-xl flex items-center justify-center gap-3 transition-all transform hover:scale-105 shadow-lg disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:scale-100"
                 >
                   <Upload className="w-6 h-6" />
                   Upload Photo
@@ -441,7 +427,16 @@ export default function TouchGrassApp() {
               </div>
             )}
 
-            {result && !analyzing && (
+            {result?.error && !analyzing && (
+              <div className="rounded-2xl shadow-xl p-6 border-2 bg-amber-50 border-amber-400 text-center">
+                <AlertTriangle className="w-10 h-10 text-amber-500 mx-auto mb-3" />
+                <h2 className="text-xl font-bold text-amber-800 mb-2">Couldn't check that photo</h2>
+                <p className="text-sm text-amber-800">{result.reason}</p>
+                <p className="text-xs text-amber-700 mt-2">This attempt wasn't counted, so your streak is safe.</p>
+              </div>
+            )}
+
+            {result && !result.error && !analyzing && (
               <div className={`rounded-2xl shadow-xl p-6 border-2 ${
                 result.touching_grass ? 'bg-green-50 border-green-400' : 'bg-red-50 border-red-400'
               }`}>
