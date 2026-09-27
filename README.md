@@ -1,70 +1,68 @@
-# Getting Started with Create React App
+# 🌱 Touch Grass
 
-This project was bootstrapped with [Create React App](https://github.com/facebook/create-react-app).
+A playful React web app that makes you prove you went outside. Snap or upload a photo, and the app analyzes it in the browser to decide whether you actually touched grass. It then roasts or praises you, tracks your streak, and ranks you on a leaderboard.
 
-## Available Scripts
+## Features
 
-In the project directory, you can run:
+- **Photo check-ins**: take a photo with your phone camera or upload one from your device
+- **In-browser image analysis**: pixel-level brightness and color analysis on an HTML canvas, with no server round-trip
+- **Streaks and stats**: current streak, best streak, and success rate
+- **Achievements**: unlock badges such as *On Fire* (3-day streak) and *Grass Master* (25 successful touches)
+- **Leaderboard**: top 10 users ranked by best streak
+- **History**: your 20 most recent check-ins, with the verdict and commentary for each
+- **Mobile-first UI**: built with Tailwind CSS and Lucide icons
 
-### `npm start`
+## How the grass detection works
 
-Runs the app in the development mode.\
-Open [http://localhost:3000](http://localhost:3000) to view it in your browser.
+The uploaded image is drawn onto an offscreen `<canvas>`, and every pixel is inspected:
 
-The page will reload when you make changes.\
-You may also see any lint errors in the console.
+1. **Brightness**: the average of the R, G and B channels across the image. Outdoor daylight photos score above 100/255.
+2. **Greenness**: the share of pixels where green is the dominant channel and bright enough to count (`g > r && g > b && g > 100`). Grass-heavy photos have more than 10% of these pixels.
 
-### `npm test`
+A photo counts as "touching grass" only when it is **both** bright and green. The result screen shows both measurements, so users can see why a photo passed or failed.
 
-Launches the test runner in the interactive watch mode.\
-See the section about [running tests](https://facebook.github.io/create-react-app/docs/running-tests) for more information.
+## Tech stack
 
-### `npm run build`
+| Layer   | Technology                               |
+| ------- | ---------------------------------------- |
+| UI      | React 19, Tailwind CSS 3, Lucide React   |
+| Tooling | Create React App (`react-scripts`)       |
+| Storage | Browser `localStorage` (no backend)      |
+| Testing | Jest, React Testing Library              |
 
-Builds the app for production to the `build` folder.\
-It correctly bundles React in production mode and optimizes the build for the best performance.
+## Getting started
 
-The build is minified and the filenames include the hashes.\
-Your app is ready to be deployed!
+**Prerequisites:** Node.js 18+ and npm.
 
-See the section about [deployment](https://facebook.github.io/create-react-app/docs/deployment) for more information.
+```bash
+git clone https://github.com/djdelacruz2024/touch-grass-app.git
+cd touch-grass-app
+npm install
+npm start
+```
 
-### `npm run eject`
+The app opens at [http://localhost:3000](http://localhost:3000). Enter any username to start; no account or password is required.
 
-**Note: this is a one-way operation. Once you `eject`, you can't go back!**
+### Scripts
 
-If you aren't satisfied with the build tool and configuration choices, you can `eject` at any time. This command will remove the single build dependency from your project.
+| Command         | Description                                   |
+| --------------- | --------------------------------------------- |
+| `npm start`     | Run the development server with hot reload    |
+| `npm test`      | Run the test suite in watch mode              |
+| `npm run build` | Create an optimized production build in `build/` |
 
-Instead, it will copy all the configuration files and the transitive dependencies (webpack, Babel, ESLint, etc) right into your project so you have full control over them. All of the commands except `eject` will still work, but they will point to the copied scripts so you can tweak them. At this point you're on your own.
+## Project structure
 
-You don't have to ever use `eject`. The curated feature set is suitable for small and middle deployments, and you shouldn't feel obligated to use this feature. However we understand that this tool wouldn't be useful if you couldn't customize it when you are ready for it.
+```
+src/
+├── App.js         # All views: login, camera, leaderboard, history, profile
+├── storage.js     # Async key/value wrapper around localStorage
+├── App.test.js    # Component tests
+└── index.js       # React entry point
+```
 
-## Learn More
+## Limitations and future work
 
-You can learn more in the [Create React App documentation](https://facebook.github.io/create-react-app/docs/getting-started).
-
-To learn React, check out the [React documentation](https://reactjs.org/).
-
-### Code Splitting
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/code-splitting](https://facebook.github.io/create-react-app/docs/code-splitting)
-
-### Analyzing the Bundle Size
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size](https://facebook.github.io/create-react-app/docs/analyzing-the-bundle-size)
-
-### Making a Progressive Web App
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app](https://facebook.github.io/create-react-app/docs/making-a-progressive-web-app)
-
-### Advanced Configuration
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/advanced-configuration](https://facebook.github.io/create-react-app/docs/advanced-configuration)
-
-### Deployment
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/deployment](https://facebook.github.io/create-react-app/docs/deployment)
-
-### `npm run build` fails to minify
-
-This section has moved here: [https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify](https://facebook.github.io/create-react-app/docs/troubleshooting#npm-run-build-fails-to-minify)
+- **Heuristic detection**: bright green scenes (a sunny park, or a green wall) are what pass, not grass specifically. A natural next step is an image-classification model such as a TensorFlow.js model running in the browser.
+- **Local-only data**: users, history and the leaderboard live in the browser's `localStorage`, so they aren't shared across devices. A backend (for example Firebase or Supabase) would make the leaderboard global and add real authentication.
+- **One photo per streak day is not enforced**: each successful photo increases the streak, even when several are taken on the same day.
