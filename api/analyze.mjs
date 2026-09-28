@@ -6,7 +6,7 @@ import Anthropic from '@anthropic-ai/sdk';
 import { betaZodOutputFormat } from '@anthropic-ai/sdk/helpers/beta/zod';
 import { z } from 'zod';
 
-const MODEL = process.env.CLAUDE_MODEL || 'claude-opus-5';
+const MODEL = process.env.CLAUDE_MODEL || 'claude-opus-5-5';
 const MAX_IMAGE_BYTES = 3_500_000; // stays under Vercel's 4.5 MB request limit
 const MEDIA_TYPES = ['image/jpeg', 'image/png', 'image/webp', 'image/gif'];
 

@@ -69,7 +69,7 @@ The app opens at [http://localhost:3000](http://localhost:3000). `npm run dev` s
 | Variable            | Required | Description                                         |
 | ------------------- | -------- | --------------------------------------------------- |
 | `ANTHROPIC_API_KEY` | Yes      | Used by the API function to call Claude             |
-| `CLAUDE_MODEL`      | No       | Overrides the model (default: `claude-opus-5`)      |
+| `CLAUDE_MODEL`      | No       | Overrides the model (default: `claude-opus-5-5`)    |
 
 ## Deployment
 
